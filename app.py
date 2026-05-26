@@ -187,10 +187,10 @@ with st.container(border=True):
     col3, col4 = st.columns(2)
 
     with col3:
-        rayon = st.number_input(T["radius"], min_value=1, max_value=500, value=25)
+        rayon = st.number_input(T["radius"], min_value=1, max_value=100, value=25)
 
     with col4:
-        max_results = st.number_input(T["max_results"], min_value=10, max_value=3000, value=500)
+        max_results = st.number_input(T["max_results"], min_value=10, max_value=1500, value=300)
 
     st.markdown(f"### {T['sources']}")
     source_osm = st.checkbox("OpenStreetMap", value=True)
@@ -360,12 +360,31 @@ def extract_from_osm(
     """
 
     try:
+        success = False
+response = None
+
+for attempt in range(3):
+    try:
         response = requests.post(
             overpass_url,
             data={"data": query},
-            timeout=120,
+            timeout=90,
             headers={"User-Agent": "market-intelligence-app"}
         )
+
+        if response.status_code == 200:
+            success = True
+            break
+
+    except Exception:
+        pass
+
+if not success:
+    st.error(
+        "Serveur OpenStreetMap temporairement occupé. "
+        "Réessayez dans quelques secondes ou réduisez le rayon."
+    )
+    return pd.DataFrame()
     except Exception:
         st.error("Erreur de connexion avec Overpass API.")
         return pd.DataFrame()
