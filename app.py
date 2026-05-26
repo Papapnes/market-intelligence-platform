@@ -5,16 +5,24 @@ import hashlib
 from datetime import datetime
 from io import BytesIO
 
+# =========================
+# PAGE CONFIG
+# =========================
 st.set_page_config(
-    page_title="Market Intelligence — Plateforme commerciale",
+    page_title="Market Intelligence Platform",
     page_icon="🌐",
     layout="wide"
 )
 
+# =========================
+# STYLE
+# =========================
 st.markdown("""
 <style>
 .main-title {font-size: 34px; font-weight: 800; color: #2b2d42;}
 .subtitle {color: #6c757d; font-size: 15px;}
+.profile-name {font-size: 24px; font-weight: 800; color: #2b2d42;}
+.profile-role {font-size: 15px; color: #6c757d;}
 .stButton > button {border-radius: 10px; height: 45px; font-weight: 600;}
 div[data-testid="stMetric"] {
     background-color: #f8f9fa;
@@ -25,48 +33,177 @@ div[data-testid="stMetric"] {
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown(
-    '<div class="main-title">🌐 Market Intelligence — Plateforme d’intelligence commerciale</div>',
-    unsafe_allow_html=True
+# =========================
+# LANGUAGE DICTIONARY
+# =========================
+TEXTS = {
+    "Français": {
+        "title": "🌐 Market Intelligence — Plateforme d’intelligence commerciale",
+        "subtitle": "Extraction, enrichissement, scoring et export pour analyse Power BI.",
+        "sector": "DOMAINE / SECTEUR D’ACTIVITÉ",
+        "country": "PAYS",
+        "city": "VILLE / RÉGION",
+        "radius": "RAYON (KM)",
+        "max_results": "NB. RÉSULTATS MAX",
+        "sources": "SOURCES DE DONNÉES",
+        "objective": "OBJECTIF ANALYTIQUE",
+        "run": "🚀 Lancer l’extraction intelligente",
+        "data": "📊 Données enrichies pour Power BI",
+        "download_csv": "⬇️ Télécharger CSV Power BI",
+        "download_excel": "⬇️ Télécharger Excel avec KPI",
+    },
+    "English": {
+        "title": "🌐 Market Intelligence — Commercial Intelligence Platform",
+        "subtitle": "Extraction, enrichment, scoring and export for Power BI analysis.",
+        "sector": "BUSINESS SECTOR",
+        "country": "COUNTRY",
+        "city": "CITY / REGION",
+        "radius": "RADIUS (KM)",
+        "max_results": "MAX RESULTS",
+        "sources": "DATA SOURCES",
+        "objective": "ANALYSIS OBJECTIVE",
+        "run": "🚀 Run smart extraction",
+        "data": "📊 Enriched data for Power BI",
+        "download_csv": "⬇️ Download Power BI CSV",
+        "download_excel": "⬇️ Download Excel with KPI",
+    },
+    "العربية": {
+        "title": "🌐 منصة ذكاء السوق والتحليل التجاري",
+        "subtitle": "استخراج البيانات، إثراؤها، تقييمها وتصديرها لتحليل Power BI.",
+        "sector": "قطاع النشاط",
+        "country": "البلد",
+        "city": "المدينة / المنطقة",
+        "radius": "نطاق البحث بالكيلومتر",
+        "max_results": "الحد الأقصى للنتائج",
+        "sources": "مصادر البيانات",
+        "objective": "هدف التحليل",
+        "run": "🚀 بدء الاستخراج الذكي",
+        "data": "📊 بيانات جاهزة لتحليل Power BI",
+        "download_csv": "⬇️ تحميل CSV",
+        "download_excel": "⬇️ تحميل Excel مع KPI",
+    }
+}
+
+# =========================
+# SECTOR DICTIONARY
+# =========================
+SECTOR_DICTIONARY = {
+    "informatique": ["computer", "electronics", "mobile_phone", "computer_repair", "it", "software"],
+    "computer": ["computer", "electronics", "mobile_phone", "computer_repair", "it", "software"],
+    "téléphone": ["mobile_phone", "electronics", "phone", "repair"],
+    "mobile": ["mobile_phone", "electronics", "phone", "repair"],
+    "pharmacie": ["pharmacy", "chemist"],
+    "pharmacy": ["pharmacy", "chemist"],
+    "restaurant": ["restaurant", "fast_food", "cafe"],
+    "café": ["cafe", "restaurant"],
+    "coiffure": ["hairdresser", "beauty"],
+    "beauty": ["hairdresser", "beauty", "cosmetics"],
+    "automobile": ["car", "car_repair", "auto_parts", "vehicle"],
+    "auto": ["car", "car_repair", "auto_parts", "vehicle"],
+    "immobilier": ["real_estate", "estate_agent"],
+    "real estate": ["real_estate", "estate_agent"],
+    "clinique": ["clinic", "doctors", "dentist"],
+    "clinic": ["clinic", "doctors", "dentist"],
+    "épicerie": ["supermarket", "convenience", "grocery"],
+    "grocery": ["supermarket", "convenience", "grocery"],
+    "vêtement": ["clothes", "fashion", "shoes"],
+    "clothes": ["clothes", "fashion", "shoes"],
+    "banque": ["bank", "financial", "atm"],
+    "bank": ["bank", "financial", "atm"],
+}
+
+# =========================
+# HEADER PROFILE
+# =========================
+col_img, col_info = st.columns([1, 5])
+
+with col_img:
+    try:
+        st.image("assets/profile.jpg", width=110)
+    except Exception:
+        st.write("")
+
+with col_info:
+    st.markdown('<div class="profile-name">Abdelkader Bouzourine</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="profile-role">Data Analyst | Business Intelligence | Python | Power BI</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown("[Portfolio](https://papapnes.github.io/Portfolio_Abdel/)")
+
+st.divider()
+
+# =========================
+# LANGUAGE SELECTION
+# =========================
+app_language = st.selectbox(
+    "Langue / Language / اللغة",
+    ["Français", "English", "العربية"]
 )
-st.markdown(
-    '<div class="subtitle">Extraction, enrichissement, scoring et export pour analyse Power BI.</div>',
-    unsafe_allow_html=True
-)
+
+T = TEXTS[app_language]
+
+st.markdown(f'<div class="main-title">{T["title"]}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="subtitle">{T["subtitle"]}</div>', unsafe_allow_html=True)
 st.write("")
 
+# =========================
+# USER INTERFACE
+# =========================
 with st.container(border=True):
-    domaine = st.text_input(
-        "DOMAINE / SECTEUR D’ACTIVITÉ",
-        placeholder="ex: computer, electronics, mobile phone, pharmacy..."
-    )
+    secteur_options = [
+        "informatique",
+        "computer",
+        "téléphone",
+        "mobile",
+        "pharmacie",
+        "restaurant",
+        "café",
+        "coiffure",
+        "automobile",
+        "immobilier",
+        "clinique",
+        "épicerie",
+        "vêtement",
+        "banque",
+        "Autre / Custom"
+    ]
+
+    selected_sector = st.selectbox(T["sector"], secteur_options)
+
+    if selected_sector == "Autre / Custom":
+        domaine = st.text_input(T["sector"], placeholder="ex: electronics, bakery, gym...")
+    else:
+        domaine = selected_sector
 
     col1, col2 = st.columns(2)
+
     with col1:
-        pays = st.text_input("PAYS", placeholder="ex: Canada")
+        pays = st.text_input(T["country"], placeholder="ex: Canada")
+
     with col2:
-        ville = st.text_input("VILLE / RÉGION", placeholder="ex: Montréal")
+        ville = st.text_input(T["city"], placeholder="ex: Montréal")
 
-    col3, col4, col5 = st.columns(3)
+    col3, col4 = st.columns(2)
+
     with col3:
-        rayon = st.number_input("RAYON (KM)", min_value=1, max_value=500, value=25)
-    with col4:
-        langue = st.selectbox("LANGUE DES RÉSULTATS", ["Français", "Anglais"])
-    with col5:
-        max_results = st.number_input("NB. RÉSULTATS MAX", min_value=10, max_value=3000, value=500)
+        rayon = st.number_input(T["radius"], min_value=1, max_value=500, value=25)
 
-    st.markdown("### SOURCES DE DONNÉES")
+    with col4:
+        max_results = st.number_input(T["max_results"], min_value=10, max_value=3000, value=500)
+
+    st.markdown(f"### {T['sources']}")
     source_osm = st.checkbox("OpenStreetMap", value=True)
-    source_sites = st.checkbox("Sites web", value=False)
+    source_sites = st.checkbox("Sites web / Websites", value=False)
 
     st.info(
         "OpenStreetMap est utilisé pour l’extraction principale. "
         "L’option Sites web est préparée pour une prochaine étape d’enrichissement."
     )
 
-    st.markdown("### OBJECTIF ANALYTIQUE")
+    st.markdown(f"### {T['objective']}")
     objectif = st.selectbox(
-        "Type d’analyse",
+        T["objective"],
         [
             "Analyse de marché",
             "Prospection B2B",
@@ -76,12 +213,30 @@ with st.container(border=True):
         ]
     )
 
-    lancer = st.button("🚀 Lancer l’extraction intelligente", use_container_width=True)
+    lancer = st.button(T["run"], use_container_width=True)
 
-
+# =========================
+# FUNCTIONS
+# =========================
 def generate_business_id(name, city, address, lat, lon):
     raw = f"{name}_{city}_{address}_{lat}_{lon}".lower().strip()
     return hashlib.md5(raw.encode()).hexdigest()
+
+
+def expand_keywords(domain):
+    domain_lower = domain.lower().strip()
+    base_keywords = domain_lower.split()
+
+    expanded = []
+    for keyword in base_keywords:
+        expanded.append(keyword)
+        if keyword in SECTOR_DICTIONARY:
+            expanded.extend(SECTOR_DICTIONARY[keyword])
+
+    if domain_lower in SECTOR_DICTIONARY:
+        expanded.extend(SECTOR_DICTIONARY[domain_lower])
+
+    return list(set(expanded))
 
 
 def geocode_location(city, country):
@@ -102,7 +257,7 @@ def geocode_location(city, country):
     return float(data[0]["lat"]), float(data[0]["lon"])
 
 
-def calculate_quality_score(row):
+def calculate_business_score(row):
     score = 0
 
     if row["Telephone"]:
@@ -194,7 +349,7 @@ def extract_from_osm(
         return pd.DataFrame()
 
     rows = []
-    keywords = domain.lower().split()
+    keywords = expand_keywords(domain)
     now = datetime.today()
 
     for element in data.get("elements", []):
@@ -222,6 +377,7 @@ def extract_from_osm(
         email = tags.get("email", tags.get("contact:email", ""))
 
         category = tags.get("shop", tags.get("amenity", tags.get("office", "")))
+        opening_hours = tags.get("opening_hours", "")
 
         row = {
             "Business_ID": generate_business_id(name, city, full_address, lat_value, lon_value),
@@ -245,6 +401,8 @@ def extract_from_osm(
             "Email": email,
             "Website": website,
 
+            "Opening_Hours": opening_hours,
+
             "Facebook_URL": "",
             "Instagram_URL": "",
             "TikTok_URL": "",
@@ -254,12 +412,15 @@ def extract_from_osm(
             "Presence_Email": "Oui" if email else "Non",
             "Presence_Telephone": "Oui" if phone else "Non",
             "Presence_Address": "Oui" if full_address else "Non",
+            "Presence_Opening_Hours": "Oui" if opening_hours else "Non",
             "Contact_Complete": "Oui" if phone and website and email else "Non",
 
             "Google_Rating": None,
             "Review_Count": None,
             "Reputation_Score": None,
 
+            "Search_Domain": domain,
+            "Expanded_Search_Keywords": ", ".join(keywords),
             "Source_Data": "OpenStreetMap",
             "Source_Extraction": "OpenStreetMap",
             "Website_Enrichment_Selected": "Oui" if source_sites else "Non",
@@ -278,9 +439,8 @@ def extract_from_osm(
     if df.empty:
         return df
 
-    df["Score_Qualite"] = df.apply(calculate_quality_score, axis=1)
-    df["Winner_Score"] = df["Score_Qualite"]
-    df["Business_Status"] = df["Winner_Score"].apply(classify_business)
+    df["Business_Score"] = df.apply(calculate_business_score, axis=1)
+    df["Business_Status"] = df["Business_Score"].apply(classify_business)
     df["Digital_Maturity"] = df.apply(classify_digital_maturity, axis=1)
 
     df["Social_Network_Count"] = (
@@ -289,9 +449,7 @@ def extract_from_osm(
         .sum(axis=1)
     )
 
-    df["AI_Business_Score"] = df["Winner_Score"]
-
-    df["AI_Potential_Level"] = df["AI_Business_Score"].apply(
+    df["AI_Potential_Level"] = df["Business_Score"].apply(
         lambda x: "Fort potentiel" if x >= 75
         else "Potentiel moyen" if x >= 45
         else "Faible potentiel"
@@ -331,14 +489,16 @@ def to_excel(df):
                 "Avec email",
                 "Avec site web",
                 "Avec adresse",
+                "Avec heures ouverture",
                 "Contact complet",
-                "Score moyen",
+                "Business score moyen",
                 "Commerces Winner",
                 "Commerces moyens",
                 "Commerces faibles",
                 "Possibles doublons",
                 "Multi-location",
-                "Présence web %"
+                "Présence web %",
+                "Présence horaires %"
             ],
             "Valeur": [
                 len(df),
@@ -346,14 +506,16 @@ def to_excel(df):
                 int((df["Presence_Email"] == "Oui").sum()),
                 int((df["Presence_Web"] == "Oui").sum()),
                 int((df["Presence_Address"] == "Oui").sum()),
+                int((df["Presence_Opening_Hours"] == "Oui").sum()),
                 int((df["Contact_Complete"] == "Oui").sum()),
-                round(df["Winner_Score"].mean(), 2),
+                round(df["Business_Score"].mean(), 2),
                 int((df["Business_Status"] == "Winner").sum()),
                 int((df["Business_Status"] == "Moyen").sum()),
                 int((df["Business_Status"] == "Faible").sum()),
                 int((df["Possible_Duplicate"] == "Oui").sum()),
                 int((df["Multi_Location"] == "Oui").sum()),
-                round((df["Presence_Web"] == "Oui").mean() * 100, 2)
+                round((df["Presence_Web"] == "Oui").mean() * 100, 2),
+                round((df["Presence_Opening_Hours"] == "Oui").mean() * 100, 2)
             ]
         })
 
@@ -362,20 +524,20 @@ def to_excel(df):
     return output.getvalue()
 
 
+# =========================
+# EXECUTION
+# =========================
 if lancer:
     if not domaine or not pays or not ville:
         st.error("Veuillez remplir le domaine, le pays et la ville.")
-
     elif not source_osm:
         st.error("Veuillez sélectionner OpenStreetMap comme source principale.")
-
     else:
         with st.spinner("Extraction et enrichissement en cours..."):
             lat, lon = geocode_location(ville, pays)
 
             if lat is None:
                 st.error("Localisation introuvable.")
-
             else:
                 df = extract_from_osm(
                     domain=domaine,
@@ -394,7 +556,6 @@ if lancer:
                         "Aucun résultat trouvé. Essayez un mot-clé plus général : "
                         "computer, electronics, mobile, repair."
                     )
-
                 else:
                     st.success(f"{len(df)} commerces enrichis trouvés.")
 
@@ -402,46 +563,27 @@ if lancer:
 
                     with col_a:
                         st.metric("Total commerces", len(df))
-
                     with col_b:
                         st.metric("Avec téléphone", int((df["Presence_Telephone"] == "Oui").sum()))
-
                     with col_c:
                         st.metric("Avec site web", int((df["Presence_Web"] == "Oui").sum()))
-
                     with col_d:
                         st.metric("Avec email", int((df["Presence_Email"] == "Oui").sum()))
-
                     with col_e:
-                        st.metric("Contact complet", int((df["Contact_Complete"] == "Oui").sum()))
+                        st.metric("Avec horaires", int((df["Presence_Opening_Hours"] == "Oui").sum()))
 
                     st.markdown("### 📈 KPI Business Intelligence")
 
                     k1, k2, k3, k4 = st.columns(4)
 
                     with k1:
-                        st.metric(
-                            "Présence Web %",
-                            round((df["Presence_Web"] == "Oui").mean() * 100, 1)
-                        )
-
+                        st.metric("Présence Web %", round((df["Presence_Web"] == "Oui").mean() * 100, 1))
                     with k2:
-                        st.metric(
-                            "Maturité digitale élevée",
-                            int((df["Digital_Maturity"] == "Élevée").sum())
-                        )
-
+                        st.metric("Présence horaires %", round((df["Presence_Opening_Hours"] == "Oui").mean() * 100, 1))
                     with k3:
-                        st.metric(
-                            "Franchises détectées",
-                            int((df["Multi_Location"] == "Oui").sum())
-                        )
-
+                        st.metric("Franchises détectées", int((df["Multi_Location"] == "Oui").sum()))
                     with k4:
-                        st.metric(
-                            "Doublons potentiels",
-                            int((df["Possible_Duplicate"] == "Oui").sum())
-                        )
+                        st.metric("Doublons potentiels", int((df["Possible_Duplicate"] == "Oui").sum()))
 
                     st.markdown("### 🏆 Répartition des commerces")
 
@@ -449,17 +591,14 @@ if lancer:
 
                     with c1:
                         st.metric("Winner", int((df["Business_Status"] == "Winner").sum()))
-
                     with c2:
                         st.metric("Moyen", int((df["Business_Status"] == "Moyen").sum()))
-
                     with c3:
                         st.metric("Faible", int((df["Business_Status"] == "Faible").sum()))
-
                     with c4:
-                        st.metric("Score moyen", round(df["Winner_Score"].mean(), 1))
+                        st.metric("Business Score moyen", round(df["Business_Score"].mean(), 1))
 
-                    st.markdown("### 📊 Données enrichies pour Power BI")
+                    st.markdown(f"### {T['data']}")
                     st.dataframe(df, use_container_width=True)
 
                     csv = df.to_csv(index=False).encode("utf-8-sig")
@@ -469,7 +608,7 @@ if lancer:
 
                     with col_csv:
                         st.download_button(
-                            "⬇️ Télécharger CSV Power BI",
+                            T["download_csv"],
                             data=csv,
                             file_name="market_intelligence_powerbi.csv",
                             mime="text/csv",
@@ -478,7 +617,7 @@ if lancer:
 
                     with col_excel:
                         st.download_button(
-                            "⬇️ Télécharger Excel avec KPI",
+                            T["download_excel"],
                             data=excel,
                             file_name="market_intelligence_powerbi.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
