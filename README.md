@@ -1,35 +1,20 @@
-# Market Intelligence App
+# Market Intelligence Platform
 
-Application Streamlit pour collecter, nettoyer et exporter des données d'établissements selon un secteur et une localisation.
+Plateforme d’intelligence commerciale développée avec Streamlit et OpenStreetMap.
 
-## Lancer en local
+## Fonctionnalités
 
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+- Extraction commerces
+- Géolocalisation
+- KPI Business Intelligence
+- Détection franchises
+- Export Power BI
+- Scoring business
 
-## Structure
+## Technologies
 
-```text
-market-intelligence-app/
-├── app.py
-├── requirements.txt
-├── README.md
-├── scrapers/
-│   ├── __init__.py
-│   ├── google_maps.py
-│   ├── pages_jaunes.py
-│   ├── facebook.py
-│   └── web_search.py
-└── utils/
-    ├── __init__.py
-    ├── data_cleaner.py
-    └── export.py
-```
-
-## Notes
-
-- La source Google Maps fonctionne avec une clé API Google Places.
-- Les modules Pages Jaunes, Facebook et Web général sont des placeholders pour garder l'application stable.
-- Pour la production, utilisez des API officielles et respectez les conditions d'utilisation des sources.
+- Python
+- Streamlit
+- Pandas
+- OpenStreetMap
+- Overpass API

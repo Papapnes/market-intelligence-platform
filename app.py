@@ -1,308 +1,486 @@
-"""
-Market Intelligence Tool — Application principale Streamlit
-Version corrigée pour GitHub / Streamlit.
-"""
-
-from __future__ import annotations
-
-from datetime import datetime
-import time
-
-import pandas as pd
 import streamlit as st
-
-from scrapers.google_maps import scrape_google_maps
-from scrapers.pages_jaunes import scrape_pages_jaunes
-from scrapers.facebook import scrape_facebook_pages
-from scrapers.web_search import scrape_web_generic
-from utils.data_cleaner import clean_and_merge
-from utils.export import export_csv, export_excel, export_json
-
+import pandas as pd
+import requests
+import hashlib
+from datetime import datetime
+from io import BytesIO
 
 st.set_page_config(
-    page_title="Market Intelligence",
-    page_icon="🔍",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    page_title="Market Intelligence — Plateforme commerciale",
+    page_icon="🌐",
+    layout="wide"
 )
+
+st.markdown("""
+<style>
+.main-title {font-size: 34px; font-weight: 800; color: #2b2d42;}
+.subtitle {color: #6c757d; font-size: 15px;}
+.stButton > button {border-radius: 10px; height: 45px; font-weight: 600;}
+div[data-testid="stMetric"] {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.markdown(
-    """
-<style>
-    [data-testid="stSidebar"] { background: #0f0f1a; }
-    [data-testid="stSidebar"] * { color: #e0e0f0 !important; }
-    .stTextInput > div > div > input { border-radius: 8px; }
-    h1 { font-size: 1.8rem !important; }
-</style>
-""",
-    unsafe_allow_html=True,
+    '<div class="main-title">🌐 Market Intelligence — Plateforme d’intelligence commerciale</div>',
+    unsafe_allow_html=True
 )
+st.markdown(
+    '<div class="subtitle">Extraction, enrichissement, scoring et export pour analyse Power BI.</div>',
+    unsafe_allow_html=True
+)
+st.write("")
 
-
-with st.sidebar:
-    st.markdown("## ⚙️ Paramètres")
-    st.markdown("---")
-
+with st.container(border=True):
     domaine = st.text_input(
-        "🏷️ Domaine / Secteur",
-        placeholder="ex: magasin informatique, réparation cellulaire...",
-        help="Le type d'établissement à rechercher",
+        "DOMAINE / SECTEUR D’ACTIVITÉ",
+        placeholder="ex: computer, electronics, mobile phone, pharmacy..."
     )
 
-    st.markdown("**📍 Localisation**")
-    col_pays, col_ville = st.columns(2)
-    with col_pays:
-        pays = st.text_input("Pays", value="Canada")
-    with col_ville:
-        ville = st.text_input("Ville", placeholder="Montréal")
+    col1, col2 = st.columns(2)
+    with col1:
+        pays = st.text_input("PAYS", placeholder="ex: Canada")
+    with col2:
+        ville = st.text_input("VILLE / RÉGION", placeholder="ex: Montréal")
 
-    region = st.text_input("Région / Province", value="Québec")
-    rayon_km = st.slider("Rayon de recherche (km)", 5, 500, 50)
+    col3, col4, col5 = st.columns(3)
+    with col3:
+        rayon = st.number_input("RAYON (KM)", min_value=1, max_value=500, value=25)
+    with col4:
+        langue = st.selectbox("LANGUE DES RÉSULTATS", ["Français", "Anglais"])
+    with col5:
+        max_results = st.number_input("NB. RÉSULTATS MAX", min_value=10, max_value=3000, value=500)
 
-    st.markdown("---")
-    st.markdown("**🌐 Sources de données**")
+    st.markdown("### SOURCES DE DONNÉES")
+    source_osm = st.checkbox("OpenStreetMap", value=True)
+    source_sites = st.checkbox("Sites web", value=False)
 
-    src_gmaps = st.checkbox("🗺️ Google Maps API", value=True)
-    src_pj = st.checkbox("📖 Pages Jaunes", value=False)
-    src_facebook = st.checkbox("📘 Facebook Pages", value=False)
-    src_web = st.checkbox("🔎 Web général", value=False)
-
-    st.markdown("---")
-    st.markdown("**🔧 Options avancées**")
-    max_results = st.number_input("Résultats max", 10, 2000, 100, step=10)
-    langue = st.selectbox("Langue résultats", ["fr", "en"])
-    google_api_key = st.text_input(
-        "Clé API Google Maps",
-        type="password",
-        placeholder="AIza...",
-        help="Requis pour la source Google Maps API.",
+    st.info(
+        "OpenStreetMap est utilisé pour l’extraction principale. "
+        "L’option Sites web est préparée pour une prochaine étape d’enrichissement."
     )
 
-    lancer = st.button("🚀 Lancer l'extraction", use_container_width=True, type="primary")
+    st.markdown("### OBJECTIF ANALYTIQUE")
+    objectif = st.selectbox(
+        "Type d’analyse",
+        [
+            "Analyse de marché",
+            "Prospection B2B",
+            "Analyse concurrence",
+            "Détection des commerces winners",
+            "Cartographie commerciale"
+        ]
+    )
+
+    lancer = st.button("🚀 Lancer l’extraction intelligente", use_container_width=True)
 
 
-st.title("🔍 Market Intelligence — Extracteur de données")
-st.caption("Collectez et nettoyez des données d'établissements selon un secteur et une localisation.")
-
-tab_resultats, tab_carte, tab_export, tab_guide = st.tabs(
-    ["📊 Résultats", "🗺️ Carte", "⬇️ Export", "📖 Guide"]
-)
+def generate_business_id(name, city, address, lat, lon):
+    raw = f"{name}_{city}_{address}_{lat}_{lon}".lower().strip()
+    return hashlib.md5(raw.encode()).hexdigest()
 
 
-def build_query(domain: str, city: str, country: str, province: str) -> tuple[str, str]:
-    parts = [domain, city, province, country]
-    query = " ".join([p.strip() for p in parts if p and p.strip()])
-    location_parts = [city, province, country]
-    location = ", ".join([p.strip() for p in location_parts if p and p.strip()])
-    return query, location
+def geocode_location(city, country):
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {"q": f"{city}, {country}", "format": "json", "limit": 1}
+    headers = {"User-Agent": "market-intelligence-app"}
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=30)
+        data = response.json()
+    except Exception:
+        st.error("Erreur lors du géocodage de la localisation.")
+        return None, None
+
+    if not data:
+        return None, None
+
+    return float(data[0]["lat"]), float(data[0]["lon"])
+
+
+def calculate_quality_score(row):
+    score = 0
+
+    if row["Telephone"]:
+        score += 20
+    if row["Website"]:
+        score += 25
+    if row["Email"]:
+        score += 20
+    if row["Address"]:
+        score += 15
+    if row["Latitude"] and row["Longitude"]:
+        score += 20
+
+    return score
+
+
+def classify_business(score):
+    if score >= 75:
+        return "Winner"
+    elif score >= 45:
+        return "Moyen"
+    else:
+        return "Faible"
+
+
+def classify_digital_maturity(row):
+    if row["Website"] and row["Email"] and row["Telephone"]:
+        return "Élevée"
+    elif row["Website"] or row["Email"]:
+        return "Moyenne"
+    else:
+        return "Faible"
+
+
+def extract_from_osm(
+    domain,
+    lat,
+    lon,
+    radius_km,
+    max_results,
+    city,
+    country,
+    objectif,
+    source_sites=False
+):
+    radius_m = radius_km * 1000
+    overpass_url = "https://overpass-api.de/api/interpreter"
+
+    query = f"""
+    [out:json][timeout:90];
+    (
+      node["shop"](around:{radius_m},{lat},{lon});
+      way["shop"](around:{radius_m},{lat},{lon});
+      relation["shop"](around:{radius_m},{lat},{lon});
+
+      node["office"](around:{radius_m},{lat},{lon});
+      way["office"](around:{radius_m},{lat},{lon});
+
+      node["amenity"](around:{radius_m},{lat},{lon});
+      way["amenity"](around:{radius_m},{lat},{lon});
+    );
+    out center;
+    """
+
+    try:
+        response = requests.post(
+            overpass_url,
+            data={"data": query},
+            timeout=120,
+            headers={"User-Agent": "market-intelligence-app"}
+        )
+    except Exception:
+        st.error("Erreur de connexion avec Overpass API.")
+        return pd.DataFrame()
+
+    if response.status_code != 200:
+        st.error(f"Erreur API Overpass : {response.status_code}")
+        return pd.DataFrame()
+
+    if not response.text.strip():
+        st.error("Réponse vide de Overpass API.")
+        return pd.DataFrame()
+
+    try:
+        data = response.json()
+    except Exception:
+        st.error("Impossible de lire la réponse JSON.")
+        st.code(response.text[:1000])
+        return pd.DataFrame()
+
+    rows = []
+    keywords = domain.lower().split()
+    now = datetime.today()
+
+    for element in data.get("elements", []):
+        tags = element.get("tags", {})
+
+        name = tags.get("name", "")
+        category_text = " ".join(str(v).lower() for v in tags.values())
+
+        if not name:
+            continue
+
+        if not any(keyword in category_text or keyword in name.lower() for keyword in keywords):
+            continue
+
+        lat_value = element.get("lat") or element.get("center", {}).get("lat")
+        lon_value = element.get("lon") or element.get("center", {}).get("lon")
+
+        full_address = " ".join([
+            tags.get("addr:housenumber", ""),
+            tags.get("addr:street", "")
+        ]).strip()
+
+        phone = tags.get("phone", tags.get("contact:phone", ""))
+        website = tags.get("website", tags.get("contact:website", ""))
+        email = tags.get("email", tags.get("contact:email", ""))
+
+        category = tags.get("shop", tags.get("amenity", tags.get("office", "")))
+
+        row = {
+            "Business_ID": generate_business_id(name, city, full_address, lat_value, lon_value),
+
+            "Business_Name": name,
+            "Category": category,
+            "Sub_Category": tags.get("brand", ""),
+            "Description": category_text[:250],
+            "Services": category,
+
+            "Address": full_address,
+            "City": tags.get("addr:city", city),
+            "Region": tags.get("addr:region", ""),
+            "Province": tags.get("addr:province", ""),
+            "Country": country,
+            "Postal_Code": tags.get("addr:postcode", ""),
+            "Latitude": lat_value,
+            "Longitude": lon_value,
+
+            "Telephone": phone,
+            "Email": email,
+            "Website": website,
+
+            "Facebook_URL": "",
+            "Instagram_URL": "",
+            "TikTok_URL": "",
+            "LinkedIn_URL": "",
+
+            "Presence_Web": "Oui" if website else "Non",
+            "Presence_Email": "Oui" if email else "Non",
+            "Presence_Telephone": "Oui" if phone else "Non",
+            "Presence_Address": "Oui" if full_address else "Non",
+            "Contact_Complete": "Oui" if phone and website and email else "Non",
+
+            "Google_Rating": None,
+            "Review_Count": None,
+            "Reputation_Score": None,
+
+            "Source_Data": "OpenStreetMap",
+            "Source_Extraction": "OpenStreetMap",
+            "Website_Enrichment_Selected": "Oui" if source_sites else "Non",
+            "Analysis_Objective": objectif,
+
+            "Date_Collecte": now.strftime("%Y-%m-%d")
+        }
+
+        rows.append(row)
+
+        if len(rows) >= max_results:
+            break
+
+    df = pd.DataFrame(rows)
+
+    if df.empty:
+        return df
+
+    df["Score_Qualite"] = df.apply(calculate_quality_score, axis=1)
+    df["Winner_Score"] = df["Score_Qualite"]
+    df["Business_Status"] = df["Winner_Score"].apply(classify_business)
+    df["Digital_Maturity"] = df.apply(classify_digital_maturity, axis=1)
+
+    df["Social_Network_Count"] = (
+        df[["Facebook_URL", "Instagram_URL", "TikTok_URL", "LinkedIn_URL"]]
+        .astype(bool)
+        .sum(axis=1)
+    )
+
+    df["AI_Business_Score"] = df["Winner_Score"]
+
+    df["AI_Potential_Level"] = df["AI_Business_Score"].apply(
+        lambda x: "Fort potentiel" if x >= 75
+        else "Potentiel moyen" if x >= 45
+        else "Faible potentiel"
+    )
+
+    df["AI_Recommendation"] = df["Business_Status"].apply(
+        lambda x: "Priorité prospection" if x == "Winner"
+        else "À surveiller" if x == "Moyen"
+        else "Faible priorité"
+    )
+
+    df["Possible_Duplicate"] = df.duplicated(
+        subset=["Business_Name", "Telephone"],
+        keep=False
+    ).map({True: "Oui", False: "Non"})
+
+    df["Multi_Location"] = df.duplicated(
+        subset=["Business_Name"],
+        keep=False
+    ).map({True: "Oui", False: "Non"})
+
+    df["Franchise_Group"] = df["Business_Name"]
+
+    return df
+
+
+def to_excel(df):
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Data_Commerces")
+
+        summary = pd.DataFrame({
+            "KPI": [
+                "Total commerces",
+                "Avec téléphone",
+                "Avec email",
+                "Avec site web",
+                "Avec adresse",
+                "Contact complet",
+                "Score moyen",
+                "Commerces Winner",
+                "Commerces moyens",
+                "Commerces faibles",
+                "Possibles doublons",
+                "Multi-location",
+                "Présence web %"
+            ],
+            "Valeur": [
+                len(df),
+                int((df["Presence_Telephone"] == "Oui").sum()),
+                int((df["Presence_Email"] == "Oui").sum()),
+                int((df["Presence_Web"] == "Oui").sum()),
+                int((df["Presence_Address"] == "Oui").sum()),
+                int((df["Contact_Complete"] == "Oui").sum()),
+                round(df["Winner_Score"].mean(), 2),
+                int((df["Business_Status"] == "Winner").sum()),
+                int((df["Business_Status"] == "Moyen").sum()),
+                int((df["Business_Status"] == "Faible").sum()),
+                int((df["Possible_Duplicate"] == "Oui").sum()),
+                int((df["Multi_Location"] == "Oui").sum()),
+                round((df["Presence_Web"] == "Oui").mean() * 100, 2)
+            ]
+        })
+
+        summary.to_excel(writer, index=False, sheet_name="Résumé_KPI")
+
+    return output.getvalue()
 
 
 if lancer:
-    if not domaine.strip():
-        st.error("⚠️ Veuillez renseigner un domaine/secteur.")
-        st.stop()
-    if not any([pays.strip(), ville.strip(), region.strip()]):
-        st.error("⚠️ Veuillez renseigner au moins une localisation.")
-        st.stop()
+    if not domaine or not pays or not ville:
+        st.error("Veuillez remplir le domaine, le pays et la ville.")
 
-    query, localisation = build_query(domaine, ville, pays, region)
+    elif not source_osm:
+        st.error("Veuillez sélectionner OpenStreetMap comme source principale.")
 
-    sources_actives = []
-    if src_gmaps:
-        sources_actives.append(
-            (
-                "Google Maps API",
-                scrape_google_maps,
-                dict(
-                    query=query,
-                    location=localisation,
-                    rayon_km=rayon_km,
-                    api_key=google_api_key,
-                    max_results=int(max_results),
-                    langue=langue,
-                ),
-            )
-        )
-    if src_pj:
-        sources_actives.append(
-            (
-                "Pages Jaunes",
-                scrape_pages_jaunes,
-                dict(query=domaine, ville=ville, pays=pays, max_results=int(max_results)),
-            )
-        )
-    if src_facebook:
-        sources_actives.append(
-            (
-                "Facebook",
-                scrape_facebook_pages,
-                dict(query=query, location=localisation, max_results=int(max_results)),
-            )
-        )
-    if src_web:
-        sources_actives.append(
-            (
-                "Web général",
-                scrape_web_generic,
-                dict(query=query, location=localisation, max_results=int(max_results)),
-            )
-        )
-
-    if not sources_actives:
-        st.error("⚠️ Veuillez activer au moins une source de données.")
-        st.stop()
-
-    resultats = []
-    with st.spinner("🔄 Extraction en cours..."):
-        progress = st.progress(0)
-        status = st.empty()
-
-        for i, (nom_source, fn_scraper, kwargs) in enumerate(sources_actives):
-            status.info(f"🔎 Collecte depuis **{nom_source}**...")
-            try:
-                data = fn_scraper(**kwargs)
-                if data:
-                    resultats.extend(data)
-                status.success(f"✅ {nom_source} : {len(data) if data else 0} résultats")
-            except Exception as exc:
-                status.warning(f"⚠️ {nom_source} : {exc}")
-
-            progress.progress((i + 1) / len(sources_actives))
-            time.sleep(0.2)
-
-        progress.empty()
-        status.empty()
-
-    if resultats:
-        df = clean_and_merge(resultats, domaine=domaine, localisation=localisation)
-        st.session_state["df"] = df
-        st.session_state["meta"] = {
-            "domaine": domaine,
-            "localisation": localisation,
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        }
-        st.success(f"✅ {len(df)} établissements extraits avec succès !")
     else:
-        st.error("Aucun résultat. Vérifiez vos paramètres, votre clé API ou activez une autre source.")
+        with st.spinner("Extraction et enrichissement en cours..."):
+            lat, lon = geocode_location(ville, pays)
 
+            if lat is None:
+                st.error("Localisation introuvable.")
 
-with tab_resultats:
-    if "df" not in st.session_state:
-        st.info("👈 Configurez votre recherche dans la barre latérale et cliquez sur **Lancer l'extraction**.")
-        cols = [
-            "Nom_Magasin", "Ville", "Région", "Adresse", "Latitude", "Longitude", "Téléphone",
-            "Site_Web", "Email", "Note_Google", "Nombre_Avis", "Services", "Présence_Web", "Source", "Date_Collecte",
-        ]
-        st.dataframe(pd.DataFrame({"Colonnes prévues": cols}), use_container_width=True, hide_index=True)
-    else:
-        df = st.session_state["df"]
-        meta = st.session_state["meta"]
-        st.caption(f"Domaine : **{meta['domaine']}** | Zone : **{meta['localisation']}** | Extrait le : {meta['date']}")
-
-        c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("Total", len(df))
-        c2.metric("Avec site web", f"{int(df['Site_Web'].notna().mean() * 100)}%" if "Site_Web" in df else "—")
-        c3.metric("Note moyenne", f"{df['Note_Google'].dropna().mean():.1f}/5" if "Note_Google" in df and df['Note_Google'].notna().any() else "—")
-        c4.metric("Avec téléphone", f"{int(df['Téléphone'].notna().mean() * 100)}%" if "Téléphone" in df else "—")
-        c5.metric("Villes couvertes", df["Ville"].nunique() if "Ville" in df else "—")
-
-        st.markdown("---")
-        col_f1, col_f2, col_f3 = st.columns(3)
-        with col_f1:
-            filtre_ville = st.multiselect("Filtrer par ville", sorted(df["Ville"].dropna().unique()) if "Ville" in df else [])
-        with col_f2:
-            note_min = st.slider("Note min", 0.0, 5.0, 0.0, 0.5)
-        with col_f3:
-            filtre_web = st.checkbox("Avec site web seulement")
-
-        df_affiche = df.copy()
-        if filtre_ville and "Ville" in df_affiche:
-            df_affiche = df_affiche[df_affiche["Ville"].isin(filtre_ville)]
-        if note_min > 0 and "Note_Google" in df_affiche:
-            df_affiche = df_affiche[df_affiche["Note_Google"].fillna(0) >= note_min]
-        if filtre_web and "Site_Web" in df_affiche:
-            df_affiche = df_affiche[df_affiche["Site_Web"].notna()]
-
-        st.dataframe(df_affiche, use_container_width=True, hide_index=True)
-        st.caption(f"{len(df_affiche)} lignes affichées")
-
-
-with tab_carte:
-    if "df" not in st.session_state:
-        st.info("Lancez d'abord une extraction.")
-    else:
-        df = st.session_state["df"]
-        if {"Latitude", "Longitude"}.issubset(df.columns):
-            df_map = df.dropna(subset=["Latitude", "Longitude"]).copy()
-            if not df_map.empty:
-                df_map = df_map.rename(columns={"Latitude": "lat", "Longitude": "lon"})
-                st.map(df_map[["lat", "lon"]])
-                st.caption(f"{len(df_map)} établissements géolocalisés affichés")
             else:
-                st.warning("Aucune coordonnée GPS disponible.")
-        else:
-            st.warning("Pas de coordonnées GPS disponibles pour cette extraction.")
+                df = extract_from_osm(
+                    domain=domaine,
+                    lat=lat,
+                    lon=lon,
+                    radius_km=rayon,
+                    max_results=max_results,
+                    city=ville,
+                    country=pays,
+                    objectif=objectif,
+                    source_sites=source_sites
+                )
 
+                if df.empty:
+                    st.warning(
+                        "Aucun résultat trouvé. Essayez un mot-clé plus général : "
+                        "computer, electronics, mobile, repair."
+                    )
 
-with tab_export:
-    if "df" not in st.session_state:
-        st.info("Lancez d'abord une extraction.")
-    else:
-        df = st.session_state["df"]
-        meta = st.session_state["meta"]
-        slug = f"{meta['domaine']}_{meta['localisation']}_{datetime.now().strftime('%Y%m%d')}"
-        slug = slug.replace(" ", "_").replace(",", "").replace("/", "-")
+                else:
+                    st.success(f"{len(df)} commerces enrichis trouvés.")
 
-        st.markdown("### ⬇️ Télécharger vos données")
-        col_e1, col_e2, col_e3 = st.columns(3)
+                    col_a, col_b, col_c, col_d, col_e = st.columns(5)
 
-        with col_e1:
-            st.download_button("📄 Télécharger CSV", export_csv(df), f"{slug}.csv", "text/csv", use_container_width=True)
-        with col_e2:
-            st.download_button(
-                "📊 Télécharger Excel",
-                export_excel(df, meta),
-                f"{slug}.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
-        with col_e3:
-            st.download_button("📦 Télécharger JSON", export_json(df, meta), f"{slug}.json", "application/json", use_container_width=True)
+                    with col_a:
+                        st.metric("Total commerces", len(df))
 
-        st.markdown("---")
-        st.markdown("### 👁️ Aperçu des données")
-        st.dataframe(df.head(10), use_container_width=True, hide_index=True)
+                    with col_b:
+                        st.metric("Avec téléphone", int((df["Presence_Telephone"] == "Oui").sum()))
 
+                    with col_c:
+                        st.metric("Avec site web", int((df["Presence_Web"] == "Oui").sum()))
 
-with tab_guide:
-    st.markdown(
-        """
-## 📖 Guide d'utilisation
+                    with col_d:
+                        st.metric("Avec email", int((df["Presence_Email"] == "Oui").sum()))
 
-### Structure GitHub recommandée
-```text
-market-intelligence-app/
-├── app.py
-├── requirements.txt
-├── README.md
-├── scrapers/
-│   ├── __init__.py
-│   ├── google_maps.py
-│   ├── pages_jaunes.py
-│   ├── facebook.py
-│   └── web_search.py
-└── utils/
-    ├── __init__.py
-    ├── data_cleaner.py
-    └── export.py
-```
+                    with col_e:
+                        st.metric("Contact complet", int((df["Contact_Complete"] == "Oui").sum()))
 
-### Google Maps API
-- Activez **Places API** dans Google Cloud.
-- Créez une clé API.
-- Collez la clé dans la barre latérale.
+                    st.markdown("### 📈 KPI Business Intelligence")
 
-### Note importante
-Respectez les conditions d'utilisation des sites. Pour un projet stable, privilégiez les API officielles.
-"""
-    )
+                    k1, k2, k3, k4 = st.columns(4)
+
+                    with k1:
+                        st.metric(
+                            "Présence Web %",
+                            round((df["Presence_Web"] == "Oui").mean() * 100, 1)
+                        )
+
+                    with k2:
+                        st.metric(
+                            "Maturité digitale élevée",
+                            int((df["Digital_Maturity"] == "Élevée").sum())
+                        )
+
+                    with k3:
+                        st.metric(
+                            "Franchises détectées",
+                            int((df["Multi_Location"] == "Oui").sum())
+                        )
+
+                    with k4:
+                        st.metric(
+                            "Doublons potentiels",
+                            int((df["Possible_Duplicate"] == "Oui").sum())
+                        )
+
+                    st.markdown("### 🏆 Répartition des commerces")
+
+                    c1, c2, c3, c4 = st.columns(4)
+
+                    with c1:
+                        st.metric("Winner", int((df["Business_Status"] == "Winner").sum()))
+
+                    with c2:
+                        st.metric("Moyen", int((df["Business_Status"] == "Moyen").sum()))
+
+                    with c3:
+                        st.metric("Faible", int((df["Business_Status"] == "Faible").sum()))
+
+                    with c4:
+                        st.metric("Score moyen", round(df["Winner_Score"].mean(), 1))
+
+                    st.markdown("### 📊 Données enrichies pour Power BI")
+                    st.dataframe(df, use_container_width=True)
+
+                    csv = df.to_csv(index=False).encode("utf-8-sig")
+                    excel = to_excel(df)
+
+                    col_csv, col_excel = st.columns(2)
+
+                    with col_csv:
+                        st.download_button(
+                            "⬇️ Télécharger CSV Power BI",
+                            data=csv,
+                            file_name="market_intelligence_powerbi.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+
+                    with col_excel:
+                        st.download_button(
+                            "⬇️ Télécharger Excel avec KPI",
+                            data=excel,
+                            file_name="market_intelligence_powerbi.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
