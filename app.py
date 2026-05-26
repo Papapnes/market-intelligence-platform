@@ -194,7 +194,7 @@ with st.container(border=True):
 
     st.markdown(f"### {T['sources']}")
     source_osm = st.checkbox("OpenStreetMap", value=True)
-    source_sites = st.checkbox("Sites web / Websites", value=False)
+    source_sites = st.checkbox("Websites-coming soon", value=False)
 
     st.info(
         "OpenStreetMap est utilisé pour l’extraction principale. "
