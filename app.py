@@ -5,18 +5,12 @@ import hashlib
 from datetime import datetime
 from io import BytesIO
 
-# =========================
-# PAGE CONFIG
-# =========================
 st.set_page_config(
     page_title="Market Intelligence Platform",
     page_icon="🌐",
     layout="wide"
 )
 
-# =========================
-# STYLE
-# =========================
 st.markdown("""
 <style>
 .main-title {font-size: 34px; font-weight: 800; color: #2b2d42;}
@@ -33,9 +27,6 @@ div[data-testid="stMetric"] {
 </style>
 """, unsafe_allow_html=True)
 
-# =========================
-# LANGUAGE DICTIONARY
-# =========================
 TEXTS = {
     "Français": {
         "title": "🌐 Market Intelligence — Plateforme d’intelligence commerciale",
@@ -84,9 +75,6 @@ TEXTS = {
     }
 }
 
-# =========================
-# SECTOR DICTIONARY
-# =========================
 SECTOR_DICTIONARY = {
     "informatique": ["computer", "electronics", "mobile_phone", "computer_repair", "it", "software"],
     "computer": ["computer", "electronics", "mobile_phone", "computer_repair", "it", "software"],
@@ -112,9 +100,6 @@ SECTOR_DICTIONARY = {
     "bank": ["bank", "financial", "atm"],
 }
 
-# =========================
-# HEADER PROFILE
-# =========================
 col_img, col_info = st.columns([1, 5])
 
 with col_img:
@@ -133,9 +118,6 @@ with col_info:
 
 st.divider()
 
-# =========================
-# LANGUAGE SELECTION
-# =========================
 app_language = st.selectbox(
     "Langue / Language / اللغة",
     ["Français", "English", "العربية"]
@@ -147,9 +129,6 @@ st.markdown(f'<div class="main-title">{T["title"]}</div>', unsafe_allow_html=Tru
 st.markdown(f'<div class="subtitle">{T["subtitle"]}</div>', unsafe_allow_html=True)
 st.write("")
 
-# =========================
-# USER INTERFACE
-# =========================
 with st.container(border=True):
     secteur_options = [
         "informatique",
@@ -187,10 +166,10 @@ with st.container(border=True):
     col3, col4 = st.columns(2)
 
     with col3:
-        rayon = st.number_input(T["radius"], min_value=1, max_value=500, value=25)
+        rayon = st.number_input(T["radius"], min_value=1, max_value=50, value=25)
 
     with col4:
-        max_results = st.number_input(T["max_results"], min_value=10, max_value=3000, value=500)
+        max_results = st.number_input(T["max_results"], min_value=10, max_value=500, value=300)
 
     st.markdown(f"### {T['sources']}")
     source_osm = st.checkbox("OpenStreetMap", value=True)
@@ -215,9 +194,7 @@ with st.container(border=True):
 
     lancer = st.button(T["run"], use_container_width=True)
 
-# =========================
-# FUNCTIONS
-# =========================
+
 def generate_business_id(name, city, address, lat, lon):
     raw = f"{name}_{city}_{address}_{lat}_{lon}".lower().strip()
     return hashlib.md5(raw.encode()).hexdigest()
@@ -250,23 +227,17 @@ def expand_keywords(domain):
     }
 
     expanded = []
-
-    # mots écrits par l'utilisateur
     base_keywords = domain_lower.replace("/", " ").replace("-", " ").split()
-    expanded.extend(base_keywords)
 
-    # domaine complet
+    expanded.extend(base_keywords)
     expanded.append(domain_lower)
 
-    # dictionnaire principal existant
     if domain_lower in SECTOR_DICTIONARY:
         expanded.extend(SECTOR_DICTIONARY[domain_lower])
 
-    # synonymes custom
     if domain_lower in synonyms:
         expanded.extend(synonyms[domain_lower])
 
-    # synonymes par mot
     for keyword in base_keywords:
         if keyword in SECTOR_DICTIONARY:
             expanded.extend(SECTOR_DICTIONARY[keyword])
@@ -359,19 +330,30 @@ def extract_from_osm(
     out center;
     """
 
-    try:
-        response = requests.post(
-            overpass_url,
-            data={"data": query},
-            timeout=120,
-            headers={"User-Agent": "market-intelligence-app"}
-        )
-    except Exception:
-        st.error("Erreur de connexion avec Overpass API.")
-        return pd.DataFrame()
+    success = False
+    response = None
 
-    if response.status_code != 200:
-        st.error(f"Erreur API Overpass : {response.status_code}")
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                overpass_url,
+                data={"data": query},
+                timeout=90,
+                headers={"User-Agent": "market-intelligence-app"}
+            )
+
+            if response.status_code == 200:
+                success = True
+                break
+
+        except Exception:
+            pass
+
+    if not success:
+        st.error(
+            "Serveur OpenStreetMap temporairement occupé. "
+            "Réessayez dans quelques secondes ou réduisez le rayon."
+        )
         return pd.DataFrame()
 
     if not response.text.strip():
@@ -412,7 +394,6 @@ def extract_from_osm(
         phone = tags.get("phone", tags.get("contact:phone", ""))
         website = tags.get("website", tags.get("contact:website", ""))
         email = tags.get("email", tags.get("contact:email", ""))
-
         category = tags.get("shop", tags.get("amenity", tags.get("office", "")))
         opening_hours = tags.get("opening_hours", "")
 
@@ -437,7 +418,6 @@ def extract_from_osm(
             "Telephone": phone,
             "Email": email,
             "Website": website,
-
             "Opening_Hours": opening_hours,
 
             "Facebook_URL": "",
@@ -561,17 +541,12 @@ def to_excel(df):
     return output.getvalue()
 
 
-# =========================
-# EXECUTION
-# =========================
 if lancer:
     if not domaine or not pays or not ville:
         st.error("Veuillez remplir le domaine, le pays et la ville.")
 
     elif not source_osm and not source_sites:
-        st.error(
-            "Veuillez sélectionner au moins une source de données."
-        )
+        st.error("Veuillez sélectionner au moins une source de données.")
 
     else:
         with st.spinner("Extraction et enrichissement en cours..."):
