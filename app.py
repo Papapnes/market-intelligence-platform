@@ -530,9 +530,9 @@ def to_excel(df):
 if lancer:
     if not domaine or not pays or not ville:
         st.error("Veuillez remplir le domaine, le pays et la ville.")
-    elif not source_osm:
-        st.error("Veuillez sélectionner OpenStreetMap comme source principale.")
-    else:
+   elif not source_osm and not source_sites:
+    st.error(
+           else:
         with st.spinner("Extraction et enrichissement en cours..."):
             lat, lon = geocode_location(ville, pays)
 
