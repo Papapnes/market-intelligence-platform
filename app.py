@@ -225,18 +225,55 @@ def generate_business_id(name, city, address, lat, lon):
 
 def expand_keywords(domain):
     domain_lower = domain.lower().strip()
-    base_keywords = domain_lower.split()
+
+    synonyms = {
+        "bakery": ["bakery", "pastry", "patisserie", "bread"],
+        "boulangerie": ["bakery", "pastry", "patisserie", "bread"],
+        "gym": ["gym", "fitness", "sports_centre"],
+        "salle de sport": ["gym", "fitness", "sports_centre"],
+        "hotel": ["hotel", "motel", "guest_house"],
+        "hôtel": ["hotel", "motel", "guest_house"],
+        "school": ["school", "college", "university"],
+        "école": ["school", "college", "university"],
+        "lawyer": ["lawyer", "legal", "solicitor"],
+        "avocat": ["lawyer", "legal", "solicitor"],
+        "insurance": ["insurance", "broker"],
+        "assurance": ["insurance", "broker"],
+        "accountant": ["accountant", "tax", "bookkeeping"],
+        "comptable": ["accountant", "tax", "bookkeeping"],
+        "garage": ["garage", "car_repair", "mechanic"],
+        "mechanic": ["garage", "car_repair", "mechanic"],
+        "dentist": ["dentist", "dental"],
+        "dentiste": ["dentist", "dental"],
+        "veterinary": ["veterinary", "vet"],
+        "vétérinaire": ["veterinary", "vet"],
+    }
 
     expanded = []
-    for keyword in base_keywords:
-        expanded.append(keyword)
-        if keyword in SECTOR_DICTIONARY:
-            expanded.extend(SECTOR_DICTIONARY[keyword])
 
+    # mots écrits par l'utilisateur
+    base_keywords = domain_lower.replace("/", " ").replace("-", " ").split()
+    expanded.extend(base_keywords)
+
+    # domaine complet
+    expanded.append(domain_lower)
+
+    # dictionnaire principal existant
     if domain_lower in SECTOR_DICTIONARY:
         expanded.extend(SECTOR_DICTIONARY[domain_lower])
 
-    return list(set(expanded))
+    # synonymes custom
+    if domain_lower in synonyms:
+        expanded.extend(synonyms[domain_lower])
+
+    # synonymes par mot
+    for keyword in base_keywords:
+        if keyword in SECTOR_DICTIONARY:
+            expanded.extend(SECTOR_DICTIONARY[keyword])
+        if keyword in synonyms:
+            expanded.extend(synonyms[keyword])
+
+    return list(set([x for x in expanded if x]))
 
 
 def geocode_location(city, country):
@@ -557,8 +594,8 @@ if lancer:
 
                 if df.empty:
                     st.warning(
-                        "Aucun résultat trouvé. Essayez un mot-clé plus général : "
-                        "computer, electronics, mobile, repair."
+                        "Aucun résultat trouvé. Essayez un mot-clé en anglais ou une catégorie OpenStreetMap : "
+                        "bakery, pharmacy, restaurant, gym, dentist, car_repair, computer, electronics."
                     )
                 else:
                     st.success(f"{len(df)} commerces enrichis trouvés.")
