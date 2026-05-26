@@ -364,6 +364,11 @@ def extract_from_osm(
 response = None
 
 for attempt in range(3):
+    success = False
+response = None
+
+for attempt in range(3):
+
     try:
         response = requests.post(
             overpass_url,
